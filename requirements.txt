@@ -1,0 +1,8 @@
+pinecone
+pinecone_text
+langchain_community
+sentence_transformers
+nltk
+requests
+openai
+python_dotenv
