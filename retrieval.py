@@ -56,10 +56,11 @@ with open("bm25_encoder.pkl", "rb") as f:
     bm25 = pickle.load(f)
 
 
-def query_llm(prompt, model="CohereLabs/tiny-aya-global:cohere"): #default to model of choice else passed different for experiments
+def query_llm(prompt, model="meta-llama/llama-3-8b-instruct"): #default to model of choice else passed different for experiments
     client = OpenAI(
-        base_url="https://router.huggingface.co/v1",
-        api_key=os.getenv("HF_TOKEN"),
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OR_TOKEN"),
+        
     )
 
     completion = client.chat.completions.create(
@@ -70,6 +71,7 @@ def query_llm(prompt, model="CohereLabs/tiny-aya-global:cohere"): #default to mo
                 "content": prompt
             }
         ],
+        max_tokens=512,
     )
     return completion.choices[0].message
 

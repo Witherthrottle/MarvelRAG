@@ -4,10 +4,10 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 
-def judge_llm(prompt, model="CohereLabs/tiny-aya-global:cohere"): #default to model of choice else passed different for experiments
+def judge_llm(prompt, model="qwen/qwen3.5-flash-02-23"): #default to model of choice else passed different for experiments
     client = OpenAI(
-        base_url="https://router.huggingface.co/v1",
-        api_key=os.getenv("HF_TOKEN"),
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OR_TOKEN"),
     )
 
     completion = client.chat.completions.create(
@@ -18,13 +18,14 @@ def judge_llm(prompt, model="CohereLabs/tiny-aya-global:cohere"): #default to mo
                 "content": prompt
             }
         ],
+        max_tokens=512
     )
     return completion.choices[0].message
 
 def faithfulness(gen_answer, context):
-    extraction_prompt = f"Extract factual claims from this answer as a list:\n Answer: {gen_answer}"
+    extraction_prompt = f"Extract factual claims from this answer as a list. Only respond with the list. \n Answer: {gen_answer}\n Claims:"
     claims_raw = judge_llm(extraction_prompt).content
-    print(claims_raw)
+    #print(claims_raw)
     claims = [c.strip("- ") for c in claims_raw.split("\n") if c.strip()]
     supported=0
     details = []
@@ -37,8 +38,9 @@ def faithfulness(gen_answer, context):
     return score, details
 
 def answer_relevancy(gen_answer, query, embed_model):
-    prompt = f"Generate 3 questions this answer addresses: \n Answer: {gen_answer}"
+    prompt = f"Generate 3 questions this answer addresses.Respond with the questions only. \n Answer: {gen_answer} Questions:"
     gen_qs = judge_llm(prompt).content.split('\n')[:3]
+    #print(gen_qs)
     orig_vec = np.array(embed_model.embed_query(query)).reshape(1, -1)
     similarities = []
     for q in gen_qs:
