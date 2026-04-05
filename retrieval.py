@@ -56,11 +56,10 @@ with open("bm25_encoder.pkl", "rb") as f:
     bm25 = pickle.load(f)
 
 
-def query_llm(prompt, model="meta-llama/llama-3-8b-instruct"): #default to model of choice else passed different for experiments
+def query_llm(prompt, model="mistralai/mistral-7b-instruct-v0.1"): #default to model of choice else passed different for experiments
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OR_TOKEN"),
-        
     )
 
     completion = client.chat.completions.create(
@@ -100,7 +99,7 @@ def hybrid_retrieve(query, embed_model, bm25, p_index, top_k=TOP_K, alpha=ALPHA)
     )
     return result
 
-def reranker(query, retreived_docs, top_n=6):
+def reranker(query, retrieved_docs, top_n=6):
     doc_texts = [res['metadata']['text'] for res in retrieved_docs['matches']]
     if not doc_texts:
         return []
@@ -120,7 +119,7 @@ def reranker(query, retreived_docs, top_n=6):
     else:
         return doc_texts[:actual_top_n]
 
-def get_rag_response(query_text, chunk_type="semantic", alpha=0.7, use_rerank=True, model="CohereLabs/tiny-aya-global:cohere"):
+def get_rag_response(query_text, chunk_type="semantic", alpha=0.7, use_rerank=True, model="mistralai/mistral-7b-instruct-v0.1"):
     global TYPE
     TYPE = chunk_type #pinecone update
     start_total = time.perf_counter() #total time started
@@ -150,7 +149,7 @@ def get_rag_response(query_text, chunk_type="semantic", alpha=0.7, use_rerank=Tr
 
 
 if __name__ == "__main__": #main for testing
-    query_text = "Who played the hulk"
+    query_text = "What is the Tesseract?"
     print(f"\nPerforming hybrid retrieval for question: '{query_text}'")
     
     retrieved_docs = hybrid_retrieve(query_text, embed_model=embed_model, bm25=bm25, p_index=p_index)
@@ -163,7 +162,7 @@ if __name__ == "__main__": #main for testing
         print(context)
         augmented_prompt = f"Context: {context}\n\nQuestion: {query_text}\nAnswer:"
         
-        print("\nSending context and question to LLM (Tiny Aya Global)...")
+        print("\nSending context and question to LLM(Mistral)...")
         llm_response = query_llm(augmented_prompt)
         
         print("\n--- LLM Response ---")
@@ -173,3 +172,29 @@ if __name__ == "__main__": #main for testing
         relevancy = answer_relevancy(llm_response.content, query_text, embed_model)
         print("\n------Evaluating Response------")
         print(f"\nFaithfullness: {score}\n {details}\n Relevancy: {relevancy}")
+
+        # --- COMPUTATIONAL EFFICIENCY BENCHMARKING ---
+    print("\n" + "="*50)
+    print("      COMPUTATIONAL EFFICIENCY REPORT")
+    print("="*50)
+    
+    # We use the metrics returned by the get_rag_response function
+    ans, context, metrics = get_rag_response(query_text, chunk_type=TYPE, alpha=ALPHA, use_rerank=True)
+    
+    retrieval_latency = metrics['retrieval_time']
+    inference_latency = metrics['inference_time']
+    total_latency = metrics['total_time']
+    
+    # Calculate percentages to see where the bottleneck is
+    retrieval_pct = (retrieval_latency / total_latency) * 100
+    inference_pct = (inference_latency / total_latency) * 100
+
+    print(f"Total Pipeline Latency:   {total_latency:.4f} seconds")
+    print(f" |-- Retrieval Latency:   {retrieval_latency:.4f}s ({retrieval_pct:.1f}%)")
+    print(f" |-- Inference Latency:   {inference_latency:.4f}s ({inference_pct:.1f}%)")
+    
+    # Throughput Estimation (Theoretical based on current latency)
+    # Requests Per Minute (RPM) = 60 / Total Latency
+    rpm = 60 / total_latency
+    print(f"\nEstimated Throughput:     {rpm:.2f} requests/minute (sequential)")
+    print("="*50)
